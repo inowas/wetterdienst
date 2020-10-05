@@ -16,6 +16,7 @@ Development
 - Add PDF-based ``DWDObservationMetadata.describe_fields()``
 - Upgrade Docker images to Python 3.8.6
 - Move intermediate storage of HDF out of data collection
+- Add support for Python 3.9
 
 0.8.0 (25.09.2020)
 ==================
