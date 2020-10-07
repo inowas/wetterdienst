@@ -23,9 +23,19 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         architecture: x64
+    # This step can be removed again as soon as there are binary wheels for lxml/Python 3.9 on PyPI.
+    # https://github.com/earthobservations/wetterdienst/pull/202#issuecomment-704970334
+    - name: Install dependencies for building lxml against Python 3.9 on Ubuntu
+      if: matrix.python-version == '3.9' && matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y --no-install-recommends build-essential zlib1g-dev libxml2-dev libxslt-dev
     - name: Install test automation tools
       run: |
         pip install nox==2020.8.22
         pip install poetry==1.0.10
     - name: Run tests
+      # This condition can be removed again as soon as there are binary wheels for lxml/Python 3.9 on PyPI.
+      # https://github.com/earthobservations/wetterdienst/pull/202#issuecomment-704970334
+      if: matrix.python-version != '3.9' || (matrix.python-version == '3.9' && matrix.os == 'ubuntu-latest')
       run: nox -s tests-${{ matrix.python-version }}
