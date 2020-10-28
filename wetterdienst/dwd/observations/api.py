@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import List, Union, Generator, Dict, Optional
+from typing import List, Union, Generator, Dict, Optional, Tuple
 
 import dateparser
 import pandas as pd
@@ -11,6 +11,7 @@ from wetterdienst.core.sites import SitesCore
 from wetterdienst.core.source import Source
 from wetterdienst.dwd.index import _create_file_index_for_dwd_server
 from wetterdienst.dwd.metadata.column_map import create_humanized_column_names_mapping
+from wetterdienst.dwd.metadata.datetime import DatetimeFormat
 from wetterdienst.dwd.observations.access import collect_climate_observations_data
 from wetterdienst.dwd.observations.metadata.parameter import (
     DWDObservationParameterSetStructure,
@@ -24,6 +25,7 @@ from wetterdienst.dwd.observations.metadata import (
     DWDObservationParameterSet,
     DWDObservationResolution,
 )
+from wetterdienst.dwd.observations.metadata.resolution import RESOLUTION_TO_DATETIME_FORMAT_MAPPING
 from wetterdienst.dwd.observations.stations import metadata_for_climate_observations
 from wetterdienst.store import StorageAdapter
 from wetterdienst.dwd.observations.util.parameter import (
@@ -37,7 +39,6 @@ from wetterdienst.util.enumeration import (
 )
 from wetterdienst.exceptions import (
     InvalidParameterCombination,
-    StartDateEndDateError,
 )
 from wetterdienst.dwd.metadata.constants import DWDCDCBase
 from wetterdienst.metadata.column_names import MetaColumns
@@ -52,6 +53,13 @@ class DWDObservationData(ObservationDataCore):
     """
     _source = Source.DWD
     _observation_parameter_template = DWDObservationParameter
+
+    def _parse_parameter(self, parameter):
+        """ Overrides core parsing function as for DWD we need a corresponding
+        parameter set for each parameter """
+        return create_parameter_to_parameter_set_combination(
+            parameter, self.resolution
+        )
 
     def __init__(
         self,
@@ -127,13 +135,6 @@ class DWDObservationData(ObservationDataCore):
         )
         self.humanize_column_names = humanize_column_names
 
-    def _parse_parameter(self, parameter):
-        """ Overrides core parsing function as for DWD we need a corresponding
-        parameter set for each parameter """
-        return create_parameter_to_parameter_set_combination(
-            parameter, self.resolution
-        )
-
     def __eq__(self, other):
         return (
             self.station_ids == other.station_ids
@@ -162,12 +163,13 @@ class DWDObservationData(ObservationDataCore):
         )
 
     def _collect_data(
-        self, station_id: int, parameter: DWDObservationParameterSet, **kwargs
+        self, station_id: int, parameter: Tuple[DWDObservationParameter, DWDObservationParameterSet]
     ) -> pd.DataFrame:
         """
         Method to collect data for one specified parameter. Manages restoring,
         collection and storing of data, transformation and combination of different
-        periods.
+        periods. Overwrites the base method to enable collection for different
+        periods and with respect to resolution.
 
         Args:
             station_id: station id for which parameter is collected
@@ -181,13 +183,29 @@ class DWDObservationData(ObservationDataCore):
         parameter_df = pd.DataFrame()
 
         for period in self.periods:
-            # todo: replace fuzzy args with
-            period_df = super()._collect_data(
-                station_id=station_id,
-                parameter=parameter_set,
-                period=period,
-                resolution=self.resolution  # required for storage identification
-            )
+            identifiers = parameter_set.value, period.value, self.resolution.value
+
+            if self.storage:
+                storage = self.storage.hdf5(*identifiers)
+
+                if self.storage.invalidate:
+                    self._invalidate_storage(parameter_set)
+
+                period_df = storage.restore(station_id)
+
+                if not period_df.empty:
+                    parameter_df = parameter_df.append(period_df)
+                    continue
+
+            parameter_identifier = build_parameter_identifier(
+                station_id, *identifiers)
+
+            log.info(f"Acquiring observations data for {parameter_identifier}.")
+
+            period_df = self._get_data(station_id, parameter_set, period)
+
+            if self.storage and self.storage.persist:
+                storage.store(station_id=station_id, df=parameter_df)
 
             # Filter out values which already are in the DataFrame
             try:
@@ -214,38 +232,50 @@ class DWDObservationData(ObservationDataCore):
 
         return parameter_df
 
-    def _get_data(self, station_id: int, parameter, **kwargs) -> pd.DataFrame:
-        parameter_set = parameter
-        resolution = kwargs.get("resolution")
-        period = kwargs.get("period")
+    def _get_data(self, station_id: int, parameter_set, period) -> pd.DataFrame:
+        """
+        Method for new data collection for a station id and parameter from the internet.
 
+        Args:
+            station_id: id of station for which data is collected
+            parameter_set: parameter set of those made available from DWD
+            period: period of the parameter set
+
+        Returns:
+            pandas.DataFrame for station id and parameter
+        """
         try:
             period_df = collect_climate_observations_data(
                 station_id=station_id,
                 parameter_set=parameter_set,
-                resolution=resolution,
+                resolution=self.resolution,
                 period=period
             )
         except InvalidParameterCombination:
             log.info(
                 f"Invalid combination {parameter_set.value}/"
-                f"{self.resolution.value}/{period} is skipped."
+                f"{self.resolution.value}/{period.value} is skipped."
             )
 
             period_df = pd.DataFrame()
 
         return period_df
 
-    def _invalidate_storage(self, parameter) -> None:
+    def _coerce_date_field_types(self, series: pd.Series) -> pd.Series:
+        try:
+            return pd.to_datetime(
+                series, format=RESOLUTION_TO_DATETIME_FORMAT_MAPPING[self.resolution])
+        except:
+            return pd.to_datetime(series, format=DatetimeFormat.YMDH_COLUMN_M.value)
+
+    def _invalidate_storage(self, parameter_set) -> None:
         """
         Wrapper for storage invalidation for a certain parameter. Has to be implemented
-        for DWD to accommodate the different available periods. p
+        for DWD to accommodate the different available periods.
 
         Returns:
             None
         """
-        parameter, parameter_set = parameter
-
         for period in self.periods:
             storage = self.storage.hdf5(
                 parameter_set.value, self.resolution.value, period.value,

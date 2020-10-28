@@ -21,10 +21,25 @@ class ObservationDataCore(Core):
     def _observation_parameter_template(self) -> Type[Enum]:
         pass
 
-    # @property
-    # @abstractmethod
-    # def _integer_fields(self):
-    #     pass
+    @property
+    @abstractmethod
+    def _date_fields(self) -> List[str]:
+        pass
+
+    @property
+    @abstractmethod
+    def _integer_fields(self) -> List[str]:
+        pass
+
+    @property
+    @abstractmethod
+    def _string_fields(self) -> List[str]:
+        pass
+
+    @property
+    @abstractmethod
+    def _quality_fields(self) -> List[str]:
+        pass
 
     @staticmethod
     def _parse_station_ids(station_ids: List[Union[int, str]]) -> List[int]:
@@ -96,9 +111,10 @@ class ObservationDataCore(Core):
 
     def collect_data(self) -> Generator[pd.DataFrame, None, None]:
         """
-
-        Returns:
-
+        Collect data for defined station ids and parameters. Yields a pandas.DataFrame
+        for each station id with all combined parameters for the station.
+        Yields:
+            pandas.DataFrame with data for given parameters of a station id
         """
         for station_id in self.station_ids:
             station_df = []
@@ -127,14 +143,15 @@ class ObservationDataCore(Core):
 
             yield station_df
 
-    def _collect_data(self, station_id: int, parameter: Type[Enum], **kwargs) -> pd.DataFrame:
+    def _collect_data(self, station_id: int, parameter: Type[Enum]) -> pd.DataFrame:
         """
-        Manages the data gathering for one explicit station and parameter combination.
+        Manages the data collection for one explicit station and parameter combination.
+        If wanted the data will be taken from local storage or rather freshly collected
+        with method self._get_data which has to be implemented by the source.
 
         Args:
-            station_id:
-            parameter:
-            **kwargs:
+            station_id: id of station for which data is collected
+            parameter: parameter enumeration for which station is collected
 
         Returns:
 
@@ -142,8 +159,7 @@ class ObservationDataCore(Core):
         storage = None
         if self.storage:
             storage = self.storage.hdf5(
-                parameter.value,
-                *kwargs.values()
+                parameter.value
             )
 
             if self.storage.invalidate:
@@ -155,11 +171,13 @@ class ObservationDataCore(Core):
                 return parameter_df
 
         parameter_identifier = build_parameter_identifier(
-            station_id, parameter.value, *[arg.value for arg in kwargs.values()])
+            station_id, parameter.value)
 
         log.info(f"Acquiring observations data for {parameter_identifier}.")
 
-        parameter_df = self._get_data(station_id, parameter, **kwargs)
+        parameter_df = self._get_data(station_id, parameter)
+
+        self.coerce_field_types(parameter_df)
 
         if self.storage and self.storage.persist:
             storage.store(station_id=station_id, df=parameter_df)
@@ -167,19 +185,39 @@ class ObservationDataCore(Core):
         return parameter_df
 
     @abstractmethod
-    def _get_data(self, station_id: int, parameter, **kwargs) -> pd.DataFrame:
+    def _get_data(self, station_id: int, parameter) -> pd.DataFrame:
         """
-         Implementation of the exact process of data gathering.
+         Method for new acquisition of data from the internet. Has to be implemented
+         for the source.
 
         Args:
-            station_id:
-            parameter:
-            **kwargs:
+            station_id: station id for which data is gathered
+            parameter: parameter enumeration for which data is gathered
 
         Returns:
-
+            pandas.DataFrame with a specific parameter
         """
         pass
+
+    def coerce_field_types(self, df: pd.DataFrame) -> None:
+        for column in df.columns:
+            # Station ids are handled separately as they are expected to not have any nans
+            if column == MetaColumns.STATION_ID.value:
+                df[column] = df[column].astype(int)
+            elif column in self._date_fields:
+                df[column] = self._coerce_date_field_types(df[column])
+            elif column in self._integer_fields or column in self._quality_fields:
+                df[column] = pd.to_numeric(df[column], errors="coerce").astype(
+                    pd.Int64Dtype()
+                )
+            elif column in self._string_fields:
+                df[column] = df[column].astype(pd.StringDtype())
+            else:
+                df[column] = df[column].astype(float)
+
+    @staticmethod
+    def _coerce_date_field_types(series: pd.Series) -> pd.Series:
+        return pd.to_datetime(series, infer_datetime_format=True)
 
     def collect_safe(self) -> pd.DataFrame:
         """
@@ -209,11 +247,13 @@ class ObservationDataCore(Core):
         storage.invalidate()
 
     def _rename_to_humanized_parameters(self, df: pd.DataFrame) -> pd.DataFrame:
+        """ Method to rename parameters to humanized ones """
         df = df.rename(columns=self._create_humanized_column_names_mapping())
 
         return df
 
     def _create_humanized_column_names_mapping(self) -> Dict[str, str]:
+        """ Method to create original parameter to humanized parameter mapping """
         hcnm = {
             parameter.value: parameter.name
             for parameter in self._observation_parameter_template
