@@ -1,7 +1,7 @@
 from wetterdienst.dwd.forecasts.metadata.parameter import DWDForecastParameter
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 
-DATE_FIELDS_REGULAR = DWDMetaColumns.DATETIME.value
+DATE_FIELDS_REGULAR = MetaColumns.DATETIME.value
 
 INTEGER_FIELDS = (
     DWDForecastParameter.WIND_DIRECTION.value,

@@ -2,7 +2,7 @@
 import pytest
 import requests
 
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.observations.fileindex import (
     create_file_index_for_climate_observations,
     create_file_list_for_climate_observations,
@@ -27,8 +27,8 @@ def test_file_index_creation():
     assert not file_index.empty
 
     assert file_index.loc[
-        file_index[DWDMetaColumns.STATION_ID.value] == 1048,
-        DWDMetaColumns.FILENAME.value,
+               file_index[MetaColumns.STATION_ID.value] == 1048,
+               MetaColumns.FILENAME.value,
     ].values.tolist() == [
         "https://opendata.dwd.de/climate_environment/CDC/observations_germany/"
         "climate/daily/kl/recent/tageswerte_KL_01048_akt.zip"

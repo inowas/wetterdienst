@@ -14,7 +14,7 @@ from wetterdienst.dwd.metadata.constants import (
     ArchiveFormat,
 )
 from wetterdienst.dwd.index import _create_file_index_for_dwd_server
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.util.cache import fileindex_cache_twelve_hours
 
 
@@ -41,9 +41,9 @@ def create_file_list_for_climate_observations(
         parameter_set, resolution, period
     )
 
-    file_index = file_index[file_index[DWDMetaColumns.STATION_ID.value] == station_id]
+    file_index = file_index[file_index[MetaColumns.STATION_ID.value] == station_id]
 
-    return file_index[DWDMetaColumns.FILENAME.value].values.tolist()
+    return file_index[MetaColumns.FILENAME.value].values.tolist()
 
 
 @fileindex_cache_twelve_hours.cache_on_arguments()
@@ -67,27 +67,27 @@ def create_file_index_for_climate_observations(
     )
 
     file_index = file_index[
-        file_index[DWDMetaColumns.FILENAME.value].str.endswith(ArchiveFormat.ZIP.value)
+        file_index[MetaColumns.FILENAME.value].str.endswith(ArchiveFormat.ZIP.value)
     ]
 
     r = re.compile(STATION_ID_REGEX)
 
-    file_index[DWDMetaColumns.STATION_ID.value] = (
-        file_index[DWDMetaColumns.FILENAME.value]
+    file_index[MetaColumns.STATION_ID.value] = (
+        file_index[MetaColumns.FILENAME.value]
         .apply(lambda filename: r.findall(filename.split("/")[-1]))
         .apply(lambda station_id: station_id[0] if station_id else pd.NA)
     )
 
     file_index = file_index.dropna().reset_index(drop=True)
 
-    file_index[DWDMetaColumns.STATION_ID.value] = file_index[
-        DWDMetaColumns.STATION_ID.value
+    file_index[MetaColumns.STATION_ID.value] = file_index[
+        MetaColumns.STATION_ID.value
     ].astype(int)
 
     file_index = file_index.sort_values(
-        by=[DWDMetaColumns.STATION_ID.value, DWDMetaColumns.FILENAME.value]
+        by=[MetaColumns.STATION_ID.value, MetaColumns.FILENAME.value]
     )
 
     return file_index.loc[
-        :, [DWDMetaColumns.STATION_ID.value, DWDMetaColumns.FILENAME.value]
+        :, [MetaColumns.STATION_ID.value, MetaColumns.FILENAME.value]
     ]

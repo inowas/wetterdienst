@@ -9,8 +9,8 @@ from wetterdienst.dwd.metadata.column_map import GERMAN_TO_ENGLISH_COLUMNS_MAPPI
 from wetterdienst.dwd.metadata.constants import NA_STRING, STATION_DATA_SEP
 from wetterdienst.dwd.metadata.column_names import (
     DWDOrigMetaColumns,
-    DWDMetaColumns,
 )
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.observations.metadata import (
     DWDObservationParameterSet,
     DWDObservationResolution,
@@ -95,7 +95,7 @@ def _parse_climate_observations_data(
     data = data.rename(columns=str.upper)
 
     # End of record (EOR) has no value, so drop it right away.
-    data = data.drop(columns=DWDMetaColumns.EOR.value, errors="ignore")
+    data = data.drop(columns=MetaColumns.EOR.value, errors="ignore")
 
     # Special handling for hourly solar data, as it has more date columns
     if (

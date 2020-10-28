@@ -5,8 +5,8 @@ from pandas._testing import assert_frame_equal
 
 from wetterdienst.dwd.util import (
     coerce_field_types,
-    build_parameter_set_identifier,
 )
+from wetterdienst.util.parameter import build_parameter_identifier
 from wetterdienst.util.enumeration import parse_enumeration_from_template
 from wetterdienst.dwd.observations import (
     DWDObservationPeriod,
@@ -78,7 +78,7 @@ def test_coerce_field_types_with_nans():
 
 
 def test_build_parameter_identifier():
-    parameter_identifier = build_parameter_set_identifier(
+    parameter_identifier = build_parameter_identifier(
         DWDObservationParameterSet.CLIMATE_SUMMARY,
         DWDObservationResolution.DAILY,
         DWDObservationPeriod.HISTORICAL,

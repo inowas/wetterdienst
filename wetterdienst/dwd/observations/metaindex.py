@@ -25,7 +25,7 @@ from wetterdienst.dwd.metadata.column_map import (
 )
 from wetterdienst.dwd.network import download_file_from_dwd
 from wetterdienst.dwd.index import build_path_to_parameter
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.observations.metadata import (
     DWDObservationParameterSet,
     DWDObservationPeriod,
@@ -35,14 +35,14 @@ from wetterdienst.exceptions import MetaFileNotFound
 from wetterdienst.util.network import list_remote_files
 
 METADATA_COLUMNS = [
-    DWDMetaColumns.STATION_ID.value,
-    DWDMetaColumns.FROM_DATE.value,
-    DWDMetaColumns.TO_DATE.value,
-    DWDMetaColumns.STATION_HEIGHT.value,
-    DWDMetaColumns.LATITUDE.value,
-    DWDMetaColumns.LONGITUDE.value,
-    DWDMetaColumns.STATION_NAME.value,
-    DWDMetaColumns.STATE.value,
+    MetaColumns.STATION_ID.value,
+    MetaColumns.FROM_DATE.value,
+    MetaColumns.TO_DATE.value,
+    MetaColumns.STATION_HEIGHT.value,
+    MetaColumns.LATITUDE.value,
+    MetaColumns.LONGITUDE.value,
+    MetaColumns.STATION_NAME.value,
+    MetaColumns.STATE.value,
 ]
 
 META_FILE_IDENTIFIERS = ["beschreibung", "txt"]
@@ -97,7 +97,7 @@ def create_meta_index_for_climate_observations(
 
     # If no state column available, take state information from daily historical
     # precipitation
-    if DWDMetaColumns.STATE.value not in meta_index:
+    if MetaColumns.STATE.value not in meta_index:
         mdp = _create_meta_index_for_climate_observations(
             DWDObservationParameterSet.PRECIPITATION_MORE,
             DWDObservationResolution.DAILY,
@@ -107,20 +107,20 @@ def create_meta_index_for_climate_observations(
         meta_index = pd.merge(
             left=meta_index,
             right=mdp.loc[
-                :, [DWDMetaColumns.STATION_ID.value, DWDMetaColumns.STATE.value]
+                :, [MetaColumns.STATION_ID.value, MetaColumns.STATE.value]
             ],
             how="left",
         )
 
-    meta_index[DWDMetaColumns.FROM_DATE.value] = pd.to_datetime(
-        meta_index[DWDMetaColumns.FROM_DATE.value], format="%Y%m%d"
+    meta_index[MetaColumns.FROM_DATE.value] = pd.to_datetime(
+        meta_index[MetaColumns.FROM_DATE.value], format="%Y%m%d"
     )
 
-    meta_index[DWDMetaColumns.TO_DATE.value] = pd.to_datetime(
-        meta_index[DWDMetaColumns.TO_DATE.value], format="%Y%m%d"
+    meta_index[MetaColumns.TO_DATE.value] = pd.to_datetime(
+        meta_index[MetaColumns.TO_DATE.value], format="%Y%m%d"
     )
 
-    return meta_index.sort_values(DWDMetaColumns.STATION_ID.value).reset_index(
+    return meta_index.sort_values(MetaColumns.STATION_ID.value).reset_index(
         drop=True
     )
 
@@ -253,16 +253,16 @@ def _create_meta_index_for_1minute_historical_precipitation() -> pd.DataFrame:
 
     meta_index_df = meta_index_df.append(other=list(metadata_dfs), ignore_index=True)
 
-    missing_to_date_index = pd.isnull(meta_index_df[DWDMetaColumns.TO_DATE.value])
+    missing_to_date_index = pd.isnull(meta_index_df[MetaColumns.TO_DATE.value])
 
     meta_index_df.loc[
-        missing_to_date_index, DWDMetaColumns.TO_DATE.value
+        missing_to_date_index, MetaColumns.TO_DATE.value
     ] = pd.Timestamp(dt.date.today() - dt.timedelta(days=1)).strftime("%Y%m%d")
 
     meta_index_df = meta_index_df.astype(METADATA_DTYPE_MAPPING)
 
     # Drop empty state column again as it will be merged later on
-    meta_index_df = meta_index_df.drop(labels=DWDMetaColumns.STATE.value, axis=1)
+    meta_index_df = meta_index_df.drop(labels=MetaColumns.STATE.value, axis=1)
 
     return meta_index_df
 
@@ -318,8 +318,8 @@ def _parse_geo_metadata(
 
     metadata_geo_df = metadata_geo_df.rename(columns=GERMAN_TO_ENGLISH_COLUMNS_MAPPING)
 
-    metadata_geo_df[DWDMetaColumns.FROM_DATE.value] = metadata_geo_df.loc[
-        0, DWDMetaColumns.FROM_DATE.value
+    metadata_geo_df[MetaColumns.FROM_DATE.value] = metadata_geo_df.loc[
+        0, MetaColumns.FROM_DATE.value
     ]
 
     metadata_geo_df = metadata_geo_df.iloc[[-1], :]

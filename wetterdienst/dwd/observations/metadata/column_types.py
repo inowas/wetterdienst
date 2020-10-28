@@ -1,14 +1,12 @@
-from wetterdienst.dwd.metadata.column_names import (
-    DWDMetaColumns,
-)
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.observations.metadata.parameter import (
     DWDObservationParameterSetStructure,
 )
 
 DATE_FIELDS_REGULAR = (
-    DWDMetaColumns.DATE.value,
-    DWDMetaColumns.FROM_DATE.value,
-    DWDMetaColumns.TO_DATE.value,
+    MetaColumns.DATE.value,
+    MetaColumns.FROM_DATE.value,
+    MetaColumns.TO_DATE.value,
 )
 DATE_FIELDS_IRREGULAR = (
     DWDObservationParameterSetStructure.HOURLY.SOLAR.END_OF_INTERVAL.value,

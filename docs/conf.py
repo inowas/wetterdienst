@@ -11,8 +11,6 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 
-# Check https://github.com/wemake-services/wemake-python-styleguide/blob/master/docs/conf.py#L22-L37
-# for how to get the version from the pyproject.toml
 import os
 import sys
 import tomlkit
@@ -20,7 +18,7 @@ import sphinx_material
 
 sys.path.insert(0, os.path.abspath('..'))
 
-
+# Check this for how to get the version from the pyproject.toml
 # https://github.com/wemake-services/wemake-python-styleguide/blob/master/docs/conf.py#L22-L37
 def _get_project_meta():
     with open('../pyproject.toml') as pyproject:

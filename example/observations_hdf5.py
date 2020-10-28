@@ -17,7 +17,7 @@ import logging
 
 from wetterdienst import DWDObservationData
 from wetterdienst import TimeResolution, DWDParameterSet
-from wetterdienst.dwd.observations.store import StorageAdapter
+from wetterdienst.store import StorageAdapter
 
 log = logging.getLogger()
 

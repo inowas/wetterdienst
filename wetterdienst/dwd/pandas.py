@@ -5,21 +5,21 @@ import json
 import pandas as pd
 
 from wetterdienst.dwd.observations.metadata import DWDObservationResolution
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.util import parse_datetime, mktimerange
 
 
 POSSIBLE_ID_VARS = (
-    DWDMetaColumns.STATION_ID.value,
-    DWDMetaColumns.DATE.value,
-    DWDMetaColumns.FROM_DATE.value,
-    DWDMetaColumns.TO_DATE.value,
+    MetaColumns.STATION_ID.value,
+    MetaColumns.DATE.value,
+    MetaColumns.FROM_DATE.value,
+    MetaColumns.TO_DATE.value,
 )
 
 POSSIBLE_DATE_VARS = (
-    DWDMetaColumns.DATE.value,
-    DWDMetaColumns.FROM_DATE.value,
-    DWDMetaColumns.TO_DATE.value,
+    MetaColumns.DATE.value,
+    MetaColumns.FROM_DATE.value,
+    MetaColumns.TO_DATE.value,
 )
 
 
@@ -36,7 +36,7 @@ class PandasDwdExtension:
         """
         df = self.df.rename(columns=str.lower)
 
-        for attribute in DWDMetaColumns.PARAMETER, DWDMetaColumns.ELEMENT:
+        for attribute in MetaColumns.PARAMETER_SET, MetaColumns.PARAMETER:
             attribute_name = attribute.value.lower()
             if attribute_name in df:
                 df[attribute_name] = df[attribute_name].str.lower()
@@ -74,12 +74,12 @@ class PandasDwdExtension:
                 DWDObservationResolution.MONTHLY,
             ):
                 date_from, date_to = mktimerange(resolution, date_from, date_to)
-                expression = (date_from <= self.df[DWDMetaColumns.FROM_DATE.value]) & (
-                    self.df[DWDMetaColumns.TO_DATE.value] <= date_to
+                expression = (date_from <= self.df[MetaColumns.FROM_DATE.value]) & (
+                        self.df[MetaColumns.TO_DATE.value] <= date_to
                 )
             else:
-                expression = (date_from <= self.df[DWDMetaColumns.DATE.value]) & (
-                    self.df[DWDMetaColumns.DATE.value] <= date_to
+                expression = (date_from <= self.df[MetaColumns.DATE.value]) & (
+                        self.df[MetaColumns.DATE.value] <= date_to
                 )
             df = self.df[expression]
 
@@ -91,11 +91,11 @@ class PandasDwdExtension:
                 DWDObservationResolution.MONTHLY,
             ):
                 date_from, date_to = mktimerange(resolution, date)
-                expression = (date_from <= self.df[DWDMetaColumns.FROM_DATE.value]) & (
-                    self.df[DWDMetaColumns.TO_DATE.value] <= date_to
+                expression = (date_from <= self.df[MetaColumns.FROM_DATE.value]) & (
+                        self.df[MetaColumns.TO_DATE.value] <= date_to
                 )
             else:
-                expression = date == self.df[DWDMetaColumns.DATE.value]
+                expression = date == self.df[MetaColumns.DATE.value]
             df = self.df[expression]
 
         return df
@@ -192,11 +192,11 @@ class PandasDwdExtension:
 
         df_tidy = self.df.melt(
             id_vars=id_vars,
-            var_name=DWDMetaColumns.ELEMENT.value,
-            value_name=DWDMetaColumns.VALUE.value,
+            var_name=MetaColumns.PARAMETER.value,
+            value_name=MetaColumns.VALUE.value,
         )
 
-        df_tidy[DWDMetaColumns.QUALITY.value] = quality.reset_index(drop=True).astype(
+        df_tidy[MetaColumns.QUALITY.value] = quality.reset_index(drop=True).astype(
             pd.Int64Dtype()
         )
 

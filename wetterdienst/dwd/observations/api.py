@@ -6,8 +6,9 @@ import dateparser
 import pandas as pd
 from pandas import Timestamp
 
-from wetterdienst.core.data import WDDataCore
-from wetterdienst.core.sites import WDSitesCore
+from wetterdienst.core.observations import ObservationDataCore
+from wetterdienst.core.sites import SitesCore
+from wetterdienst.core.source import Source
 from wetterdienst.dwd.index import _create_file_index_for_dwd_server
 from wetterdienst.dwd.metadata.column_map import create_humanized_column_names_mapping
 from wetterdienst.dwd.observations.access import collect_climate_observations_data
@@ -24,14 +25,12 @@ from wetterdienst.dwd.observations.metadata import (
     DWDObservationResolution,
 )
 from wetterdienst.dwd.observations.stations import metadata_for_climate_observations
-from wetterdienst.dwd.observations.store import StorageAdapter
+from wetterdienst.store import StorageAdapter
 from wetterdienst.dwd.observations.util.parameter import (
     create_parameter_to_parameter_set_combination,
     check_dwd_observations_parameter_set,
 )
-from wetterdienst.dwd.util import (
-    build_parameter_set_identifier,
-)
+from wetterdienst.util.parameter import build_parameter_identifier
 from wetterdienst.util.enumeration import (
     parse_enumeration_from_template,
     parse_enumeration,
@@ -39,20 +38,20 @@ from wetterdienst.util.enumeration import (
 from wetterdienst.exceptions import (
     InvalidParameterCombination,
     StartDateEndDateError,
-    InvalidParameter,
-    NoParametersFound,
 )
 from wetterdienst.dwd.metadata.constants import DWDCDCBase
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 
 log = logging.getLogger(__name__)
 
 
-class DWDObservationData(WDDataCore):
+class DWDObservationData(ObservationDataCore):
     """
     The DWDObservationData class represents a request for
     observation data as provided by the DWD service.
     """
+    _source = Source.DWD
+    _observation_parameter_template = DWDObservationParameter
 
     def __init__(
         self,
@@ -62,9 +61,9 @@ class DWDObservationData(WDDataCore):
         ],
         resolution: Union[str, DWDObservationResolution],
         periods: Optional[List[Union[str, DWDObservationPeriod]]] = None,
-        start_date: Union[None, str, Timestamp, datetime] = None,
-        end_date: Union[None, str, Timestamp, datetime] = None,
-        storage: StorageAdapter = None,
+        start_date: Optional[Union[str, Timestamp, datetime]] = None,
+        end_date: Optional[Union[str, Timestamp, datetime]] = None,
+        storage: Optional[StorageAdapter] = None,
         tidy_data: bool = True,
         humanize_column_names: bool = False,
     ) -> None:
@@ -92,32 +91,19 @@ class DWDObservationData(WDDataCore):
                                     and row-based version of data
         :param humanize_column_names: Replace column names by more meaningful ones
         """
-
-        try:
-            self.station_ids = pd.Series(station_ids).astype(int).tolist()
-        except ValueError:
-            raise ValueError("List of station id's can not be parsed to integers.")
-
+        # required for parameter parsing in Core
         self.resolution = parse_enumeration_from_template(
             resolution, DWDObservationResolution
         )
 
-        self.parameters = []
-
-        for parameter in pd.Series(parameters):
-            try:
-                (
-                    parameter,
-                    parameter_set,
-                ) = create_parameter_to_parameter_set_combination(
-                    parameter, self.resolution
-                )
-                self.parameters.append((parameter, parameter_set))
-            except InvalidParameter as e:
-                log.info(str(e))
-
-        if not self.parameters:
-            raise NoParametersFound(f"No parameters could be parsed from {parameters}")
+        super().__init__(
+            station_ids,
+            parameters,
+            start_date,
+            end_date,
+            storage,
+            humanize_column_names,
+        )
 
         # If any date is given, use all period types and filter, else if not period type
         # is given use all period types
@@ -126,33 +112,7 @@ class DWDObservationData(WDDataCore):
         # Otherwise period types will be parsed
         else:
             # For the case that a period_type is given, parse the period type(s)
-            self.periods = (
-                pd.Series(periods)
-                .apply(parse_enumeration_from_template, args=(DWDObservationPeriod,))
-                .sort_values()
-                .tolist()
-            )
-
-        if start_date or end_date:
-            # If only one date given, make the other one equal
-            if not start_date:
-                start_date = end_date
-
-            if not end_date:
-                end_date = start_date
-
-            self.start_date = Timestamp(dateparser.parse(str(start_date)))
-            self.end_date = Timestamp(dateparser.parse(str(end_date)))
-
-            if not self.start_date <= self.end_date:
-                raise StartDateEndDateError(
-                    "Error: 'start_date' must be smaller or equal to 'end_date'."
-                )
-        else:
-            self.start_date = start_date
-            self.end_date = end_date
-
-        self.storage = storage
+            self.periods = sorted(parse_enumeration(DWDObservationPeriod, periods))
 
         # If more then one parameter requested, automatically tidy data
         self.tidy_data = (
@@ -167,6 +127,13 @@ class DWDObservationData(WDDataCore):
         )
         self.humanize_column_names = humanize_column_names
 
+    def _parse_parameter(self, parameter):
+        """ Overrides core parsing function as for DWD we need a corresponding
+        parameter set for each parameter """
+        return create_parameter_to_parameter_set_combination(
+            parameter, self.resolution
+        )
+
     def __eq__(self, other):
         return (
             self.station_ids == other.station_ids
@@ -178,76 +145,24 @@ class DWDObservationData(WDDataCore):
         )
 
     def __str__(self):
-        station_ids_joined = "& ".join(
+        station_ids_joined = ", ".join(
             [str(station_id) for station_id in self.station_ids]
         )
         return ", ".join(
             [
-                f"station_ids {station_ids_joined}",
+                f"station_ids [{station_ids_joined}]",
                 "& ".join(
                     [parameter.value for parameter, parameter_set in self.parameters]
                 ),
                 self.resolution.value,
                 "& ".join([period_type.value for period_type in self.periods]),
-                self.start_date.value,
-                self.end_date.value,
+                self.start_date.value if self.start_date else str(None),
+                self.end_date.value if self.end_date else str(None),
             ]
         )
 
-    def collect_data(self) -> Generator[pd.DataFrame, None, None]:
-        """
-        Method to collect data for a defined request. The function is build as generator
-        in order to not cloak the memory thus if the user wants the data as one pandas
-        DataFrame the generator has to be casted to a DataFrame manually via
-        pd.concat(list(request.collect_data()).
-
-        :return: A generator yielding a pandas.DataFrame per station.
-        """
-        # Remove HDF file for given parameters and period_types if defined by storage
-        if self.storage and self.storage.invalidate:
-            self._invalidate_storage()
-
-        for station_id in self.station_ids:
-            df_station = []
-
-            for parameter, parameter_set in self.parameters:
-                df_parameter = self._collect_data(station_id, parameter_set)
-
-                if parameter not in DWDObservationParameterSet:
-                    if not self.humanize_column_names:
-                        df_parameter = df_parameter[
-                            df_parameter[DWDMetaColumns.ELEMENT.value]
-                            == parameter.value
-                        ]
-                    else:
-                        df_parameter = df_parameter[
-                            df_parameter[DWDMetaColumns.ELEMENT.value] == parameter.name
-                        ]
-
-                df_station.append(df_parameter)
-
-            df_station = pd.concat(df_station)
-
-            # Filter for dates range if start_date and end_date are defined
-            if self.start_date:
-                # df_station may be empty depending on if station has data for given
-                # constraints
-                try:
-                    df_station = df_station[
-                        (df_station[DWDMetaColumns.DATE.value] >= self.start_date)
-                        & (df_station[DWDMetaColumns.DATE.value] <= self.end_date)
-                    ]
-                except KeyError:
-                    pass
-
-            # Empty dataframe should be skipped
-            if df_station.empty:
-                continue
-
-            yield df_station
-
     def _collect_data(
-        self, station_id: int, parameter_set: DWDObservationParameterSet
+        self, station_id: int, parameter: DWDObservationParameterSet, **kwargs
     ) -> pd.DataFrame:
         """
         Method to collect data for one specified parameter. Manages restoring,
@@ -256,122 +171,110 @@ class DWDObservationData(WDDataCore):
 
         Args:
             station_id: station id for which parameter is collected
-            parameter_set: chosen parameter that is collected
+            parameter: chosen parameter that is collected
 
         Returns:
             pandas.DataFrame for given parameter of station
         """
-        df_parameter = pd.DataFrame()
+        parameter, parameter_set = parameter
 
-        for period_type in self.periods:
-            parameter_identifier = build_parameter_set_identifier(
-                parameter_set, self.resolution, period_type, station_id
+        parameter_df = pd.DataFrame()
+
+        for period in self.periods:
+            # todo: replace fuzzy args with
+            period_df = super()._collect_data(
+                station_id=station_id,
+                parameter=parameter_set,
+                period=period,
+                resolution=self.resolution  # required for storage identification
             )
-
-            storage = None
-            if self.storage:
-                storage = self.storage.hdf5(
-                    parameter=parameter_set,
-                    resolution=self.resolution,
-                    period=period_type,
-                )
-
-                df_period = storage.restore(station_id)
-
-                if not df_period.empty:
-                    df_parameter = df_parameter.append(df_period)
-                    continue
-
-            log.info(f"Acquiring observations data for {parameter_identifier}.")
-
-            try:
-                df_period = collect_climate_observations_data(
-                    station_id, parameter_set, self.resolution, period_type
-                )
-            except InvalidParameterCombination:
-                log.info(
-                    f"Invalid combination {parameter_set.value}/"
-                    f"{self.resolution.value}/{period_type} is skipped."
-                )
-
-                df_period = pd.DataFrame()
-
-            if self.storage and self.storage.persist:
-                storage.store(station_id=station_id, df=df_period)
 
             # Filter out values which already are in the DataFrame
             try:
-                df_period = df_period[
-                    ~df_period[DWDMetaColumns.DATE.value].isin(
-                        df_parameter[DWDMetaColumns.DATE.value]
+                period_df = period_df[
+                    ~period_df[MetaColumns.DATE.value].isin(
+                        parameter_df[MetaColumns.DATE.value]
                     )
                 ]
             except KeyError:
                 pass
 
-            df_parameter = df_parameter.append(df_period)
+            parameter_df = parameter_df.append(period_df)
 
         if self.tidy_data:
-            df_parameter = df_parameter.dwd.tidy_up_data()
+            parameter_df = parameter_df.dwd.tidy_up_data()
 
-            df_parameter.insert(2, DWDMetaColumns.PARAMETER.value, parameter_set.name)
+            parameter_df.insert(2, MetaColumns.PARAMETER_SET.value, parameter_set.name)
 
-        # Assign meaningful column names (humanized).
-        if self.humanize_column_names:
-            hcnm = self._create_humanized_column_names_mapping(
-                self.resolution, parameter_set
+        if parameter not in DWDObservationParameterSet:
+            parameter_df = parameter_df[
+                parameter_df[MetaColumns.PARAMETER.value]
+                == parameter.value
+            ]
+
+        return parameter_df
+
+    def _get_data(self, station_id: int, parameter, **kwargs) -> pd.DataFrame:
+        parameter_set = parameter
+        resolution = kwargs.get("resolution")
+        period = kwargs.get("period")
+
+        try:
+            period_df = collect_climate_observations_data(
+                station_id=station_id,
+                parameter_set=parameter_set,
+                resolution=resolution,
+                period=period
+            )
+        except InvalidParameterCombination:
+            log.info(
+                f"Invalid combination {parameter_set.value}/"
+                f"{self.resolution.value}/{period} is skipped."
             )
 
-            if self.tidy_data:
-                df_parameter[DWDMetaColumns.ELEMENT.value] = df_parameter[
-                    DWDMetaColumns.ELEMENT.value
-                ].apply(lambda x: hcnm[x])
-            else:
-                df_parameter = df_parameter.rename(columns=hcnm)
+            period_df = pd.DataFrame()
 
-        return df_parameter
+        return period_df
 
-    def collect_safe(self) -> pd.DataFrame:
+    def _invalidate_storage(self, parameter) -> None:
         """
-        Collect all data from ``DWDObservationData``.
-        """
-
-        data = list(self.collect_data())
-
-        if not data:
-            raise ValueError("No data available for given constraints")
-
-        return pd.concat(data)
-
-    def _invalidate_storage(self) -> None:
-        """
-        Wrapper for storage invalidation for all kinds of defined parameters and
-        periods. Used before gathering of data as it has no relation to any specific
-        station id.
+        Wrapper for storage invalidation for a certain parameter. Has to be implemented
+        for DWD to accommodate the different available periods. p
 
         Returns:
             None
         """
-        for parameter in self.parameters:
-            for period_type in self.periods:
-                storage = self.storage.hdf5(
-                    parameter=parameter,
-                    resolution=self.resolution,
-                    period=period_type,
-                )
+        parameter, parameter_set = parameter
 
-                storage.invalidate()
+        for period in self.periods:
+            storage = self.storage.hdf5(
+                parameter_set.value, self.resolution.value, period.value,
+            )
 
-    @staticmethod
-    def _create_humanized_column_names_mapping(
-        time_resolution: DWDObservationResolution, parameter: DWDObservationParameterSet
-    ) -> Dict[str, str]:
+            storage.invalidate()
+
+    def _rename_to_humanized_parameters(self, df: pd.DataFrame) -> pd.DataFrame:
+        """ Reimplementation as data from DWD comes originally not tidied and thus
+        renaming depends on if the data is tidied and parameters are in one column. """
+        hcnm = self._create_humanized_column_names_mapping()
+
+        if self.tidy_data:
+            df[MetaColumns.PARAMETER.value] = df[
+                MetaColumns.PARAMETER.value
+            ].apply(lambda x: hcnm[x])
+        else:
+            df = df.rename(columns=hcnm)
+
+        return df
+
+    def _create_humanized_column_names_mapping(self) -> Dict[str, str]:
+        """ Required """
         return create_humanized_column_names_mapping(
-            time_resolution, parameter, DWDObservationParameterSetStructure
+            self.resolution, DWDObservationParameterSetStructure
         )
 
 
-class DWDObservationSites(WDSitesCore):
+class DWDObservationSites(SitesCore):
     """
     The DWDObservationSites class represents a request for
     a station list as provided by the DWD service.
@@ -405,7 +308,7 @@ class DWDObservationSites(WDSitesCore):
         self.resolution = resolution
         self.period = period
 
-    def _all(self) -> pd.DataFrame:
+    def _metadata(self) -> pd.DataFrame:
         metadata = metadata_for_climate_observations(
             parameter_set=self.parameter,
             resolution=self.resolution,
@@ -413,9 +316,9 @@ class DWDObservationSites(WDSitesCore):
         )
 
         # Filter only for stations that have a file
-        metadata = metadata[metadata[DWDMetaColumns.HAS_FILE.value].values]
+        metadata = metadata[metadata[MetaColumns.HAS_FILE.value].values]
 
-        metadata = metadata.drop(columns=[DWDMetaColumns.HAS_FILE.value])
+        metadata = metadata.drop(columns=[MetaColumns.HAS_FILE.value])
 
         return metadata
 
@@ -506,11 +409,11 @@ class DWDObservationMetadata:
         )
 
         file_index = file_index[
-            file_index[DWDMetaColumns.FILENAME.value].str.contains("DESCRIPTION_")
+            file_index[MetaColumns.FILENAME.value].str.contains("DESCRIPTION_")
         ]
 
         description_file_url = str(
-            file_index[DWDMetaColumns.FILENAME.value].tolist()[0]
+            file_index[MetaColumns.FILENAME.value].tolist()[0]
         )
 
         from wetterdienst.dwd.observations.fields import read_description

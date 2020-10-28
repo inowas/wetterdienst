@@ -1,7 +1,7 @@
 import pytest
 from pandas import Timestamp
 
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.observations import (
     DWDObservationParameterSet,
     DWDObservationPeriod,
@@ -24,8 +24,8 @@ def test_dwd_observation_sites_success():
     assert not sites.empty
 
     assert sites.loc[
-        sites[DWDMetaColumns.STATION_ID.value] == 1, :
-    ].values.tolist() == [
+           sites[MetaColumns.STATION_ID.value] == 1, :
+           ].values.tolist() == [
         [
             1,
             Timestamp("19370101"),
@@ -60,7 +60,7 @@ def test_dwd_observation_sites_geojson():
 
     assert not df.empty
 
-    df = df[df[DWDMetaColumns.STATION_ID.value] == 1]
+    df = df[df[MetaColumns.STATION_ID.value] == 1]
 
     geojson = df.dwd.to_geojson()
 

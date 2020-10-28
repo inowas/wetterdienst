@@ -16,7 +16,7 @@ from wetterdienst.dwd.observations.metadata.parameter import (
     DWDObservationParameter,
     DWDObservationParameterSetStructure,
 )
-from wetterdienst.dwd.observations.store import StorageAdapter
+from wetterdienst.store import StorageAdapter
 from wetterdienst.exceptions import StartDateEndDateError, NoParametersFound
 
 HERE = Path(__file__).parent

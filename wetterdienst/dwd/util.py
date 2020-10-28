@@ -6,11 +6,9 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta
 
 from wetterdienst.dwd.observations.metadata import (
-    DWDObservationParameterSet,
     DWDObservationResolution,
-    DWDObservationPeriod,
 )
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.observations.metadata.column_types import (
     DATE_FIELDS_REGULAR,
     DATE_FIELDS_IRREGULAR,
@@ -22,19 +20,6 @@ from wetterdienst.dwd.metadata.datetime import DatetimeFormat
 from wetterdienst.dwd.observations.metadata.resolution import (
     RESOLUTION_TO_DATETIME_FORMAT_MAPPING,
 )
-
-
-def build_parameter_set_identifier(
-    parameter_set: DWDObservationParameterSet,
-    resolution: DWDObservationResolution,
-    period: DWDObservationPeriod,
-    station_id: int,
-) -> str:
-    """ Create parameter set identifier that is used for storage interactions """
-    return (
-        f"{parameter_set.value}/{resolution.value}/"
-        f"{period.value}/station_id_{str(station_id)}"
-    )
 
 
 def coerce_field_types(
@@ -56,7 +41,7 @@ def coerce_field_types(
 
     for column in df.columns:
         # Station ids are handled separately as they are expected to not have any nans
-        if column == DWDMetaColumns.STATION_ID.value:
+        if column == MetaColumns.STATION_ID.value:
             df[column] = df[column].astype(int)
         elif column in DATE_FIELDS_REGULAR:
             df[column] = pd.to_datetime(

@@ -1,67 +1,33 @@
-import logging
 from abc import abstractmethod
 from datetime import datetime
 from typing import Union
+import logging
 
 import numpy as np
 import pandas as pd
-from pandas import Timestamp
+from pandas._libs.tslibs.timestamps import Timestamp
 
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.core.core import Core
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.util import parse_datetime
 from wetterdienst.exceptions import StartDateEndDateError
 from wetterdienst.util.geo import Coordinates, derive_nearest_neighbours
 
+
 logger = logging.getLogger(__name__)
 
-KM_EARTH_RADIUS = 6371
 
-
-class WDSitesCore:
+class SitesCore(Core):
     def __init__(
         self,
         start_date: Union[None, str, Timestamp] = None,
         end_date: Union[None, str, Timestamp] = None,
     ) -> None:
-        start_date = (
-            start_date
-            if not start_date or isinstance(start_date, datetime)
-            else parse_datetime(start_date)
-        )
-        end_date = (
-            end_date
-            if not end_date or isinstance(end_date, datetime)
-            else parse_datetime(end_date)
-        )
 
-        if start_date and end_date:
-            if start_date > end_date:
-                raise StartDateEndDateError("'start_date' has to be before 'end_date'")
-
-        self.start_date = start_date
-        self.end_date = end_date
-
-    def all(self) -> pd.DataFrame:
-        """
-        Wraps the _all method and applies date filters.
-
-        Returns:
-            pandas.DataFrame with the information of different available sites
-        """
-        metadata = self._all()
-
-        if self.start_date:
-            metadata = metadata[
-                metadata[DWDMetaColumns.FROM_DATE.value] <= self.start_date
-            ]
-
-        if self.end_date:
-            metadata = metadata[metadata[DWDMetaColumns.TO_DATE.value] >= self.end_date]
-
-        return metadata
+        super().__init__(start_date, end_date)
 
     @abstractmethod
-    def _all(self) -> pd.DataFrame:
+    def _metadata(self) -> pd.DataFrame:
         """
         Abstract method for gathering of sites information for a given implementation.
         Information consist of a DataFrame with station ids, location, name, etc
@@ -70,6 +36,25 @@ class WDSitesCore:
             pandas.DataFrame with the information of different available sites
         """
         pass
+
+    def all(self) -> pd.DataFrame:
+        """
+        Wraps the _all method and applies date filters.
+
+        Returns:
+            pandas.DataFrame with the information of different available sites
+        """
+        metadata = self._metadata()
+
+        if self.start_date:
+            metadata = metadata[
+                metadata[MetaColumns.FROM_DATE.value] <= self.start_date
+                ]
+
+        if self.end_date:
+            metadata = metadata[metadata[MetaColumns.TO_DATE.value] >= self.end_date]
+
+        return metadata
 
     def nearby_number(
         self,
@@ -118,7 +103,7 @@ class WDSitesCore:
             drop=True
         )
 
-        metadata_location[DWDMetaColumns.DISTANCE_TO_LOCATION.value] = distances_km
+        metadata_location[MetaColumns.DISTANCE_TO_LOCATION.value] = distances_km
 
         if metadata_location.empty:
             logger.warning(
@@ -156,8 +141,11 @@ class WDSitesCore:
         all_nearby_stations = self.nearby_number(latitude, longitude, metadata.shape[0])
 
         nearby_stations_in_distance = all_nearby_stations[
-            all_nearby_stations[DWDMetaColumns.DISTANCE_TO_LOCATION.value]
+            all_nearby_stations[MetaColumns.DISTANCE_TO_LOCATION.value]
             <= max_distance_in_km
         ]
 
         return nearby_stations_in_distance.reset_index(drop=True)
+
+
+KM_EARTH_RADIUS = 6371

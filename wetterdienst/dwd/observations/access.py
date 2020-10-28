@@ -15,8 +15,8 @@ from wetterdienst.dwd.observations.fileindex import (
 from wetterdienst.util.cache import payload_cache_five_minutes
 from wetterdienst.dwd.util import (
     coerce_field_types,
-    build_parameter_set_identifier,
 )
+from wetterdienst.util.parameter import build_parameter_identifier
 from wetterdienst.dwd.observations.util.parameter import (
     check_dwd_observations_parameter_set,
 )
@@ -71,8 +71,8 @@ def collect_climate_observations_data(
     )
 
     if len(remote_files) == 0:
-        parameter_identifier = build_parameter_set_identifier(
-            parameter_set, resolution, period, station_id
+        parameter_identifier = build_parameter_identifier(
+            station_id, parameter_set.value, resolution.value, period.value,
         )
         log.info(f"No files found for {parameter_identifier}. Station will be skipped.")
         return pd.DataFrame()

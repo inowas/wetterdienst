@@ -25,7 +25,7 @@ from wetterdienst.dwd.radar.metadata import (
     DWDRadarResolution,
 )
 from wetterdienst.dwd.radar.sites import DWDRadarSite
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.metadata.datetime import DatetimeFormat
 from wetterdienst.util.cache import (
     payload_cache_twelve_hours,
@@ -134,19 +134,19 @@ def collect_radar_data(
                 # Filter for dates range if start_date and end_date are defined.
                 if period == DWDRadarPeriod.RECENT:
                     file_index = file_index[
-                        (file_index[DWDMetaColumns.DATETIME.value] >= start_date)
-                        & (file_index[DWDMetaColumns.DATETIME.value] < end_date)
+                        (file_index[MetaColumns.DATETIME.value] >= start_date)
+                        & (file_index[MetaColumns.DATETIME.value] < end_date)
                     ]
 
                 # This is for matching historical data, e.g. "RW-200509.tar.gz".
                 else:
                     file_index = file_index[
                         (
-                            file_index[DWDMetaColumns.DATETIME.value].dt.year
+                            file_index[MetaColumns.DATETIME.value].dt.year
                             == start_date.year
                         )
                         & (
-                            file_index[DWDMetaColumns.DATETIME.value].dt.month
+                            file_index[MetaColumns.DATETIME.value].dt.month
                             == start_date.month
                         )
                     ]
@@ -162,7 +162,7 @@ def collect_radar_data(
 
             # Iterate list of files and yield "RadarResult" items.
             for _, row in file_index.iterrows():
-                url = row[DWDMetaColumns.FILENAME.value]
+                url = row[MetaColumns.FILENAME.value]
                 yield download_radolan_data(start_date, url)
 
         else:
@@ -176,13 +176,13 @@ def collect_radar_data(
 
             # Filter for dates range if start_date and end_date are defined.
             file_index = file_index[
-                (file_index[DWDMetaColumns.DATETIME.value] >= start_date)
-                & (file_index[DWDMetaColumns.DATETIME.value] < end_date)
+                (file_index[MetaColumns.DATETIME.value] >= start_date)
+                & (file_index[MetaColumns.DATETIME.value] < end_date)
             ]
 
             # Filter SWEEP_VOL_VELOCITY_H and SWEEP_VOL_REFLECTIVITY_H by elevation.
             if elevation is not None:
-                filename = file_index[DWDMetaColumns.FILENAME.value]
+                filename = file_index[MetaColumns.FILENAME.value]
                 file_index = file_index[
                     (filename.str.contains(f"vradh_{elevation:02d}"))
                     | (filename.str.contains(f"sweep_vol_v_{elevation}"))
@@ -196,8 +196,8 @@ def collect_radar_data(
 
             # Iterate list of files and yield "RadarResult" items.
             for _, row in file_index.iterrows():
-                date_time = row[DWDMetaColumns.DATETIME.value]
-                url = row[DWDMetaColumns.FILENAME.value]
+                date_time = row[MetaColumns.DATETIME.value]
+                url = row[MetaColumns.FILENAME.value]
 
                 for result in _download_generic_data(url=url):
                     if result.timestamp is None:

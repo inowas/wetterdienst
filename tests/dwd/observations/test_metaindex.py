@@ -3,7 +3,7 @@ import requests
 import pytest
 from pandas import Timestamp
 
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.observations.metaindex import (
     create_meta_index_for_climate_observations,
 )
@@ -45,8 +45,8 @@ def test_meta_index_1mph_creation():
     )
 
     assert meta_index_1mph.loc[
-        meta_index_1mph[DWDMetaColumns.STATION_ID.value] == 3, :
-    ].values.tolist() == [
+           meta_index_1mph[MetaColumns.STATION_ID.value] == 3, :
+           ].values.tolist() == [
         [
             3,
             Timestamp("18910101"),

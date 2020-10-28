@@ -31,7 +31,7 @@ def download_file_from_dwd(url: str) -> BytesIO:
 MAX_RETRIES = 3
 
 
-@lru_cache(maxsize=None)
+@lru_cache
 def create_dwd_session() -> requests.Session:
     """
     Function used to create a global session that is used for listing/downloading data

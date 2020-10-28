@@ -3,7 +3,7 @@ from io import StringIO
 import pandas as pd
 import requests
 
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.util.cache import metaindex_cache
 
 MOSMIX_STATION_LIST = (
@@ -25,12 +25,12 @@ MOSMIX_STATION_LIST_COLSPECS = [
 ]
 
 MOSMIX_METADATA_COLUMNS = [
-    DWDMetaColumns.WMO_ID.value,
-    DWDMetaColumns.ICAO_ID.value,
-    DWDMetaColumns.STATION_NAME.value,
-    DWDMetaColumns.LATITUDE.value,
-    DWDMetaColumns.LONGITUDE.value,
-    DWDMetaColumns.STATION_HEIGHT.value,
+    MetaColumns.WMO_ID.value,
+    MetaColumns.ICAO_ID.value,
+    MetaColumns.STATION_NAME.value,
+    MetaColumns.LATITUDE.value,
+    MetaColumns.LONGITUDE.value,
+    MetaColumns.STATION_HEIGHT.value,
 ]
 
 

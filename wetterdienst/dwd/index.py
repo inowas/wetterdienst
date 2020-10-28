@@ -9,7 +9,7 @@ from wetterdienst.dwd.observations.metadata import (
     DWDObservationPeriod,
 )
 from wetterdienst.dwd.metadata.constants import DWDCDCBase, DWD_SERVER, DWD_CDC_PATH
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.util.cache import (
     fileindex_cache_five_minutes,
     fileindex_cache_one_hour,
@@ -41,7 +41,7 @@ def _create_file_index_for_dwd_server(
     files_server = list_remote_files(url, recursive=True)
 
     files_server = pd.DataFrame(
-        files_server, columns=[DWDMetaColumns.FILENAME.value], dtype="str"
+        files_server, columns=[MetaColumns.FILENAME.value], dtype="str"
     )
 
     return files_server

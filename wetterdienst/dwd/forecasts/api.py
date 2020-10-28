@@ -8,8 +8,8 @@ import pandas as pd
 from pandas._libs.tslibs.timestamps import Timestamp
 from requests import HTTPError
 
-from wetterdienst.core.data import WDDataCore
-from wetterdienst.core.sites import WDSitesCore
+from wetterdienst.core.observations import ObservationDataCore
+from wetterdienst.core.sites import SitesCore
 from wetterdienst.dwd.forecasts.metadata.column_types import (
     DATE_FIELDS_REGULAR,
     INTEGER_FIELDS,
@@ -20,7 +20,7 @@ from wetterdienst.dwd.forecasts.metadata import (
     DWDMosmixType,
 )
 from wetterdienst.dwd.forecasts.stations import metadata_for_forecasts
-from wetterdienst.dwd.metadata.column_names import DWDMetaColumns
+from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.metadata.constants import (
     DWD_SERVER,
     DWD_MOSMIX_S_PATH,
@@ -45,7 +45,7 @@ class DWDMosmixResult:
     forecast: pd.DataFrame
 
 
-class DWDMosmixData(WDDataCore):
+class DWDMosmixData(ObservationDataCore):
     """
     Fetch weather forecast data (KML/MOSMIX_S dataset).
 
@@ -201,8 +201,8 @@ class DWDMosmixData(WDDataCore):
         for df_metadata, df_forecast in self._read_mosmix(date):
             df_forecast = df_forecast.rename(
                 columns={
-                    "station_id": DWDMetaColumns.STATION_ID.value,
-                    "datetime": DWDMetaColumns.DATETIME.value,
+                    "station_id": MetaColumns.STATION_ID.value,
+                    "datetime": MetaColumns.DATETIME.value,
                 }
             )
 
@@ -211,29 +211,29 @@ class DWDMosmixData(WDDataCore):
             if self.tidy_data:
                 df_forecast = df_forecast.melt(
                     id_vars=[
-                        DWDMetaColumns.STATION_ID.value,
-                        DWDMetaColumns.DATETIME.value,
+                        MetaColumns.STATION_ID.value,
+                        MetaColumns.DATETIME.value,
                     ],
-                    var_name=DWDMetaColumns.ELEMENT.value,
-                    value_name=DWDMetaColumns.VALUE.value,
+                    var_name=MetaColumns.PARAMETER.value,
+                    value_name=MetaColumns.VALUE.value,
                 )
 
             if self.humanize_column_names:
                 hcnm = self._create_humanized_column_names_mapping()
 
                 if self.tidy_data:
-                    df_forecast[DWDMetaColumns.ELEMENT.value] = df_forecast[
-                        DWDMetaColumns.ELEMENT.value
+                    df_forecast[MetaColumns.PARAMETER.value] = df_forecast[
+                        MetaColumns.PARAMETER.value
                     ].apply(lambda x: hcnm[x])
                 else:
                     df_forecast = df_forecast.rename(columns=hcnm)
 
             # Complement metadata
-            station_id = df_forecast[DWDMetaColumns.STATION_ID.value].iloc[0]
+            station_id = df_forecast[MetaColumns.STATION_ID.value].iloc[0]
 
             station_metadata = self.metadata[
-                self.metadata[DWDMetaColumns.WMO_ID.value] == station_id
-            ].reset_index(drop=True)
+                self.metadata[MetaColumns.WMO_ID.value] == station_id
+                ].reset_index(drop=True)
 
             df_metadata = df_metadata.rename(columns=str.upper).reset_index(drop=True)
 
@@ -311,17 +311,17 @@ class DWDMosmixData(WDDataCore):
 
         df_urls = pd.DataFrame({"URL": urls})
 
-        df_urls[DWDMetaColumns.DATETIME.value] = df_urls["URL"].apply(
+        df_urls[MetaColumns.DATETIME.value] = df_urls["URL"].apply(
             lambda url_: url_.split("/")[-1].split("_")[2].replace(".kmz", "")
         )
 
-        df_urls = df_urls[df_urls[DWDMetaColumns.DATETIME.value] != "LATEST"]
+        df_urls = df_urls[df_urls[MetaColumns.DATETIME.value] != "LATEST"]
 
-        df_urls[DWDMetaColumns.DATETIME.value] = pd.to_datetime(
-            df_urls[DWDMetaColumns.DATETIME.value], format=DatetimeFormat.YMDH.value
+        df_urls[MetaColumns.DATETIME.value] = pd.to_datetime(
+            df_urls[MetaColumns.DATETIME.value], format=DatetimeFormat.YMDH.value
         )
 
-        df_urls = df_urls.loc[df_urls[DWDMetaColumns.DATETIME.value] == date]
+        df_urls = df_urls.loc[df_urls[MetaColumns.DATETIME.value] == date]
 
         if df_urls.empty:
             raise IndexError(f"Unable to find {date} file within {url}")
@@ -332,7 +332,7 @@ class DWDMosmixData(WDDataCore):
     def coerce_columns(df):
         """ Column type coercion helper """
         for column in df.columns:
-            if column == DWDMetaColumns.STATION_ID.value:
+            if column == MetaColumns.STATION_ID.value:
                 df[column] = df[column].astype(str)
             elif column in DATE_FIELDS_REGULAR:
                 df[column] = pd.to_datetime(
@@ -354,7 +354,7 @@ class DWDMosmixData(WDDataCore):
         return hcnm
 
 
-class DWDMosmixSites(WDSitesCore):
+class DWDMosmixSites(SitesCore):
     """ Implementation of sites for MOSMIX forecast sites """
 
     def __init__(
@@ -367,5 +367,5 @@ class DWDMosmixSites(WDSitesCore):
             end_date=end_date,
         )
 
-    def _all(self):
+    def _metadata(self):
         return metadata_for_forecasts()

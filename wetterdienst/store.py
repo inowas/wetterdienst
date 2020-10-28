@@ -1,9 +1,10 @@
 import logging
 from pathlib import Path
-from typing import Union
+from typing import Union, Dict, Tuple
 
 import pandas as pd
 
+from wetterdienst.core.source import Source
 from wetterdienst.dwd.observations.metadata import (
     DWDObservationParameterSet,
     DWDObservationResolution,
@@ -14,27 +15,38 @@ from wetterdienst.dwd.observations.metadata.column_types import (
     INTEGER_FIELDS,
 )
 from wetterdienst.dwd.metadata.constants import DWD_FOLDER_MAIN, DataFormat
-from wetterdienst.dwd.util import build_parameter_set_identifier
+from wetterdienst.util.parameter import build_parameter_identifier
 
 log = logging.getLogger(__name__)
 
 
 class StorageAdapter:
+    @property
+    def source(self):
+        return self.source
+
+    @source.setter
+    def source(self, source: Source):
+        if source not in Source:
+            raise ValueError(f"source {source} has to be defined in Source {Source}.")
+
+        self.source = source
+
     def __init__(
         self,
         persist: bool = False,
         invalidate: bool = False,
         folder: Union[str, Path] = DWD_FOLDER_MAIN,
-    ):
+    ) -> None:
+        self.source = None
         self.persist = persist
         self.invalidate = invalidate
         self.folder = folder
 
-    def hdf5(self, parameter, resolution, period):
+    def hdf5(self, *args):
         return LocalHDF5Store(
-            parameter_set=parameter,
-            resolution=resolution,
-            period=period,
+            identifiers=args,
+            source=self.source,
             folder=self.folder,
         )
 
@@ -42,26 +54,21 @@ class StorageAdapter:
 class LocalHDF5Store:
     def __init__(
         self,
-        parameter_set: DWDObservationParameterSet,
-        resolution: DWDObservationResolution,
-        period: DWDObservationPeriod,
+        identifiers: Tuple[str],
+        source: Source,
         folder: Union[str, Path] = DWD_FOLDER_MAIN,
-    ):
-        self.parameter_set = parameter_set
-        self.resolution = resolution
-        self.period = period
+    ) -> None:
+        self.identifiers = identifiers
+        self.source = source
         self.folder = folder
 
     @property
     def filename(self) -> str:
-        return (
-            f"{self.parameter_set.value}-{self.resolution.value}-"
-            f"{self.period.value}.{DataFormat.H5.value}"
-        )
+        return f"{'-'.join(self.identifiers)}.{DataFormat.H5.value}"
 
     @property
     def filepath(self) -> Path:
-        return Path(self.folder, self.filename).absolute()
+        return Path(self.folder, self.source.name, self.filename).absolute()
 
     def hdf5_key(self, station_id: int) -> str:
         """
@@ -72,9 +79,7 @@ class LocalHDF5Store:
         :return:            Key for storing data into HDF5 file.
         """
 
-        return build_parameter_set_identifier(
-            self.parameter_set, self.resolution, self.period, station_id
-        )
+        return build_parameter_identifier(station_id, **self.identifiers)
 
     def invalidate(self):
         """
