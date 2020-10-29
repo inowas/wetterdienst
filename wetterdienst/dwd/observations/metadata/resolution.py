@@ -6,7 +6,7 @@ from wetterdienst.dwd.metadata.datetime import DatetimeFormat
 
 class DWDObservationResolution(Enum):
     """
-    enumeration for granularity/resolution of the weather
+    enumeration for granularity/resolution of the weatherv
     observations stored on dwd server
     """
 

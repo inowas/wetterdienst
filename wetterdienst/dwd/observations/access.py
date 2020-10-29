@@ -83,8 +83,6 @@ def collect_climate_observations_data(
         filenames_and_files, parameter_set, resolution
     )
 
-    obs_df = coerce_field_types(obs_df, resolution)
-
     return obs_df
 
 

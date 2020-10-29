@@ -12,7 +12,11 @@ from wetterdienst.core.source import Source
 from wetterdienst.dwd.index import _create_file_index_for_dwd_server
 from wetterdienst.dwd.metadata.column_map import create_humanized_column_names_mapping
 from wetterdienst.dwd.metadata.datetime import DatetimeFormat
-from wetterdienst.dwd.observations.access import collect_climate_observations_data
+from wetterdienst.dwd.observations.access import collect_climate_observations_data, \
+    download_climate_observations_data_parallel
+from wetterdienst.dwd.observations.fileindex import create_file_list_for_climate_observations
+from wetterdienst.dwd.observations.metadata.column_types import DWD_DATE_FIELDS_REGULAR, DWD_DATE_FIELDS_IRREGULAR, \
+    DWD_INTEGER_FIELDS, DWD_STRING_FIELDS, DWD_QUALITY_FIELDS
 from wetterdienst.dwd.observations.metadata.parameter import (
     DWDObservationParameterSetStructure,
 )
@@ -26,6 +30,7 @@ from wetterdienst.dwd.observations.metadata import (
     DWDObservationResolution,
 )
 from wetterdienst.dwd.observations.metadata.resolution import RESOLUTION_TO_DATETIME_FORMAT_MAPPING
+from wetterdienst.dwd.observations.parser import parse_climate_observations_data
 from wetterdienst.dwd.observations.stations import metadata_for_climate_observations
 from wetterdienst.store import StorageAdapter
 from wetterdienst.dwd.observations.util.parameter import (
@@ -53,6 +58,11 @@ class DWDObservationData(ObservationDataCore):
     """
     _source = Source.DWD
     _observation_parameter_template = DWDObservationParameter
+
+    _date_fields = [*DWD_DATE_FIELDS_REGULAR, *DWD_DATE_FIELDS_IRREGULAR]
+    _integer_fields = DWD_INTEGER_FIELDS
+    _string_fields = DWD_STRING_FIELDS
+    _quality_fields = DWD_QUALITY_FIELDS
 
     def _parse_parameter(self, parameter):
         """ Overrides core parsing function as for DWD we need a corresponding
@@ -202,7 +212,9 @@ class DWDObservationData(ObservationDataCore):
 
             log.info(f"Acquiring observations data for {parameter_identifier}.")
 
-            period_df = self._get_data(station_id, parameter_set, period)
+            period_df = self.get_data(station_id, parameter_set, period)
+
+            self._coerce_field_types(period_df)
 
             if self.storage and self.storage.persist:
                 storage.store(station_id=station_id, df=parameter_df)
@@ -232,7 +244,7 @@ class DWDObservationData(ObservationDataCore):
 
         return parameter_df
 
-    def _get_data(self, station_id: int, parameter_set, period) -> pd.DataFrame:
+    def get_data(self, station_id: int, parameter_set, period) -> pd.DataFrame:
         """
         Method for new data collection for a station id and parameter from the internet.
 
@@ -244,28 +256,38 @@ class DWDObservationData(ObservationDataCore):
         Returns:
             pandas.DataFrame for station id and parameter
         """
+
         try:
-            period_df = collect_climate_observations_data(
-                station_id=station_id,
-                parameter_set=parameter_set,
-                resolution=self.resolution,
-                period=period
-            )
+            data_endpoint = self._create_data_endpoint(station_id, parameter_set, period)
         except InvalidParameterCombination:
             log.info(
                 f"Invalid combination {parameter_set.value}/"
                 f"{self.resolution.value}/{period.value} is skipped."
             )
+            return pd.DataFrame()
 
-            period_df = pd.DataFrame()
+        data = self._download_data(data_endpoint)
 
-        return period_df
+        return self._parse_data(data, parameter_set)
 
-    def _coerce_date_field_types(self, series: pd.Series) -> pd.Series:
+    def _create_data_endpoint(self, station_id: int, parameter_set, period) -> List[str]:
+        return create_file_list_for_climate_observations(
+            station_id, parameter_set, self.resolution, period
+        )
+
+    @staticmethod
+    def _download_data(data_endpoint: List[str]) -> bytes:
+        return download_climate_observations_data_parallel(data_endpoint)
+
+    def _parse_data(self, data, parameter_set) -> pd.DataFrame:
+        return parse_climate_observations_data(data, parameter_set, self.resolution)
+
+    def __coerce_date_field_types(self, series: pd.Series) -> pd.Series:
+        """ Required for hourly SOLAR data with dates with :00 ending """
         try:
             return pd.to_datetime(
                 series, format=RESOLUTION_TO_DATETIME_FORMAT_MAPPING[self.resolution])
-        except:
+        except ValueError:
             return pd.to_datetime(series, format=DatetimeFormat.YMDH_COLUMN_M.value)
 
     def _invalidate_storage(self, parameter_set) -> None:

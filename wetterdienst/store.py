@@ -11,8 +11,8 @@ from wetterdienst.dwd.observations.metadata import (
     DWDObservationPeriod,
 )
 from wetterdienst.dwd.observations.metadata.column_types import (
-    QUALITY_FIELDS,
-    INTEGER_FIELDS,
+    DWD_QUALITY_FIELDS,
+    DWD_INTEGER_FIELDS,
 )
 from wetterdienst.dwd.metadata.constants import DWD_FOLDER_MAIN, DataFormat
 from wetterdienst.util.parameter import build_parameter_identifier
@@ -107,7 +107,7 @@ class LocalHDF5Store:
 
         # Replace IntegerArrays by float64
         for column in df:
-            if column in QUALITY_FIELDS or column in INTEGER_FIELDS:
+            if column in DWD_QUALITY_FIELDS or column in DWD_INTEGER_FIELDS:
                 df[column] = df[column].astype("float64")
 
         log.info(f"Storing HDF5 data to {self.filepath}")
@@ -133,7 +133,7 @@ class LocalHDF5Store:
         df = pd.DataFrame(df)
 
         for column in df:
-            if column in QUALITY_FIELDS or column in INTEGER_FIELDS:
+            if column in DWD_QUALITY_FIELDS or column in DWD_INTEGER_FIELDS:
                 df[column] = df[column].astype(pd.Int64Dtype())
 
         return df

@@ -3,16 +3,16 @@ from wetterdienst.dwd.observations.metadata.parameter import (
     DWDObservationParameterSetStructure,
 )
 
-DATE_FIELDS_REGULAR = (
+DWD_DATE_FIELDS_REGULAR = (
     MetaColumns.DATE.value,
     MetaColumns.FROM_DATE.value,
     MetaColumns.TO_DATE.value,
 )
-DATE_FIELDS_IRREGULAR = (
+DWD_DATE_FIELDS_IRREGULAR = (
     DWDObservationParameterSetStructure.HOURLY.SOLAR.END_OF_INTERVAL.value,
     DWDObservationParameterSetStructure.HOURLY.SOLAR.TRUE_LOCAL_TIME.value,
 )
-QUALITY_FIELDS = (
+DWD_QUALITY_FIELDS = (
     # 1_minute
     # precipitation
     DWDObservationParameterSetStructure.MINUTE_1.PRECIPITATION.QUALITY.value,
@@ -100,7 +100,8 @@ QUALITY_FIELDS = (
     # weather_phenomena
     DWDObservationParameterSetStructure.ANNUAL.WEATHER_PHENOMENA.QUALITY.value,
 )
-INTEGER_FIELDS = (
+
+DWD_INTEGER_FIELDS = (
     # 1_minute
     # precipitation
     DWDObservationParameterSetStructure.MINUTE_1.PRECIPITATION.PRECIPITATION_FORM.value,
@@ -187,7 +188,8 @@ INTEGER_FIELDS = (
     DWDObservationParameterSetStructure.ANNUAL.WEATHER_PHENOMENA.FOG.value,
     DWDObservationParameterSetStructure.ANNUAL.WEATHER_PHENOMENA.DEW.value,
 )
-STRING_FIELDS = (
+
+DWD_STRING_FIELDS = (
     # hourly
     # cloud_type
     DWDObservationParameterSetStructure.HOURLY.CLOUD_TYPE.CLOUD_COVER_TOTAL_INDICATOR.value,

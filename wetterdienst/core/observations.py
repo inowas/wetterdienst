@@ -8,7 +8,7 @@ import pandas as pd
 from wetterdienst.core.core import Core
 from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.store import StorageAdapter
-from wetterdienst.exceptions import NoParametersFound, InvalidParameter, InvalidEnumeration
+from wetterdienst.exceptions import NoParametersFound, InvalidParameter, InvalidEnumeration, InvalidParameterCombination
 from wetterdienst.util.enumeration import parse_enumeration_from_template
 from wetterdienst.util.parameter import build_parameter_identifier
 
@@ -21,6 +21,7 @@ class ObservationDataCore(Core):
     def _observation_parameter_template(self) -> Type[Enum]:
         pass
 
+    # Fields for type coercion
     @property
     @abstractmethod
     def _date_fields(self) -> List[str]:
@@ -45,7 +46,7 @@ class ObservationDataCore(Core):
     def _parse_station_ids(station_ids: List[Union[int, str]]) -> List[int]:
         return pd.Series(station_ids).astype(int).tolist()
 
-    def _parse_parameters(self, parameters):
+    def _parse_parameters(self, parameters) -> List[Enum]:
         parameters_ = []
 
         for parameter in parameters:
@@ -54,9 +55,14 @@ class ObservationDataCore(Core):
             except InvalidParameter as e:
                 log.info(str(e))
 
+        if not self.parameters:
+            raise NoParametersFound(f"No parameters could be parsed from {parameters}")
+
         return parameters_
 
-    def _parse_parameter(self, parameter):
+    def _parse_parameter(self, parameter) -> Enum:
+        """ Method to parse parameter from text (or Enum). Require dedicated method for
+        DWD where we need a parameter and parameter set combination """
         try:
             return parse_enumeration_from_template(
                 parameter, self._observation_parameter_template)
@@ -76,9 +82,6 @@ class ObservationDataCore(Core):
 
         self.station_ids = self._parse_station_ids(station_ids)
         self.parameters = self._parse_parameters(parameters)
-
-        if not self.parameters:
-            raise NoParametersFound(f"No parameters could be parsed from {parameters}")
 
         if storage:
             storage.source = self._source
@@ -154,7 +157,7 @@ class ObservationDataCore(Core):
             parameter: parameter enumeration for which station is collected
 
         Returns:
-
+            pandas.DataFrame with collected data for a station id and parameter
         """
         storage = None
         if self.storage:
@@ -175,17 +178,19 @@ class ObservationDataCore(Core):
 
         log.info(f"Acquiring observations data for {parameter_identifier}.")
 
-        parameter_df = self._get_data(station_id, parameter)
+        parameter_df = self.get_data(station_id, parameter)
 
-        self.coerce_field_types(parameter_df)
+        if parameter_df.empty:
+            return parameter_df
+
+        self._coerce_field_types(parameter_df)
 
         if self.storage and self.storage.persist:
             storage.store(station_id=station_id, df=parameter_df)
 
         return parameter_df
 
-    @abstractmethod
-    def _get_data(self, station_id: int, parameter) -> pd.DataFrame:
+    def get_data(self, station_id: int, parameter) -> pd.DataFrame:
         """
          Method for new acquisition of data from the internet. Has to be implemented
          for the source.
@@ -197,15 +202,42 @@ class ObservationDataCore(Core):
         Returns:
             pandas.DataFrame with a specific parameter
         """
+        try:
+            data_endpoint = self._create_data_endpoint(station_id, parameter)
+        except InvalidParameterCombination:
+            log.info(f"Invalid combination parameter {parameter.value}/"
+                     f"station_id {station_id}")
+            return pd.DataFrame()
+
+        data = self._download_data(data_endpoint)
+
+        return self._parse_data(data)
+
+    @abstractmethod
+    def _create_data_endpoint(self, station_id: int, parameter):
         pass
 
-    def coerce_field_types(self, df: pd.DataFrame) -> None:
+    @staticmethod
+    @abstractmethod
+    def _download_data(data_endpoint):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def _parse_data(data) -> pd.DataFrame:
+        pass
+
+    def _coerce_field_types(self, df: pd.DataFrame) -> None:
+        """ Method to coerce different data types to expected formats e.g. quality as
+        integers """
+        # todo this has to be changed probably to work more with column-wise data then
+        # with row-wise data
         for column in df.columns:
             # Station ids are handled separately as they are expected to not have any nans
             if column == MetaColumns.STATION_ID.value:
                 df[column] = df[column].astype(int)
             elif column in self._date_fields:
-                df[column] = self._coerce_date_field_types(df[column])
+                df[column] = self.__coerce_date_field_types(df[column])
             elif column in self._integer_fields or column in self._quality_fields:
                 df[column] = pd.to_numeric(df[column], errors="coerce").astype(
                     pd.Int64Dtype()
@@ -216,7 +248,9 @@ class ObservationDataCore(Core):
                 df[column] = df[column].astype(float)
 
     @staticmethod
-    def _coerce_date_field_types(series: pd.Series) -> pd.Series:
+    def __coerce_date_field_types(series: pd.Series) -> pd.Series:
+        """ Require dedicated function for datetimes for case of DWD which sometimes
+        requires special parsing (see DWD hourly SOLAR data) """
         return pd.to_datetime(series, infer_datetime_format=True)
 
     def collect_safe(self) -> pd.DataFrame:

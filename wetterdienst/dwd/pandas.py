@@ -197,7 +197,9 @@ class PandasDwdExtension:
         )
 
         df_tidy[MetaColumns.QUALITY.value] = quality.reset_index(drop=True).astype(
-            pd.Int64Dtype()
-        )
+            float).astype(pd.Int64Dtype())
+
+        # Set quality for missing values also to missing
+        df_tidy.loc[df_tidy[MetaColumns.VALUE.value].isna(), MetaColumns.QUALITY.value] = pd.NA
 
         return df_tidy

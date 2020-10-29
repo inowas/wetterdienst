@@ -176,7 +176,10 @@ RESOLUTION_PARAMETER_MAPPING: Dict[
             DWDObservationPeriod.HISTORICAL,
             DWDObservationPeriod.RECENT,
         ],
-        DWDObservationParameterSet.SOLAR: [DWDObservationPeriod.RECENT],
+        DWDObservationParameterSet.SOLAR: [
+            DWDObservationPeriod.HISTORICAL,
+            DWDObservationPeriod.RECENT
+        ],
         DWDObservationParameterSet.WATER_EQUIVALENT: [
             DWDObservationPeriod.HISTORICAL,
             DWDObservationPeriod.RECENT,

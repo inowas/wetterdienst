@@ -10,58 +10,16 @@ from wetterdienst.dwd.observations.metadata import (
 )
 from wetterdienst.metadata.column_names import MetaColumns
 from wetterdienst.dwd.observations.metadata.column_types import (
-    DATE_FIELDS_REGULAR,
-    DATE_FIELDS_IRREGULAR,
-    QUALITY_FIELDS,
-    INTEGER_FIELDS,
-    STRING_FIELDS,
+    DWD_DATE_FIELDS_REGULAR,
+    DWD_DATE_FIELDS_IRREGULAR,
+    DWD_QUALITY_FIELDS,
+    DWD_INTEGER_FIELDS,
+    DWD_STRING_FIELDS,
 )
 from wetterdienst.dwd.metadata.datetime import DatetimeFormat
 from wetterdienst.dwd.observations.metadata.resolution import (
     RESOLUTION_TO_DATETIME_FORMAT_MAPPING,
 )
-
-
-def coerce_field_types(
-    df: pd.DataFrame, resolution: DWDObservationResolution
-) -> pd.DataFrame:
-    """
-    A function used to create a unique dtype mapping for a given list of column names.
-    This function is needed as we want to ensure the expected dtypes of the returned
-    DataFrame as well as for mapping data after reading it from a stored .h5 file. This
-    is required as we want to store the data in this file with the same format which is
-    a string, thus after reading data back in the dtypes have to be matched.
-
-    Args:
-        df: the station_data gathered in a pandas.DataFrame
-        resolution: time resolution of the data as enumeration
-    Return:
-         station data with converted dtypes
-    """
-
-    for column in df.columns:
-        # Station ids are handled separately as they are expected to not have any nans
-        if column == MetaColumns.STATION_ID.value:
-            df[column] = df[column].astype(int)
-        elif column in DATE_FIELDS_REGULAR:
-            df[column] = pd.to_datetime(
-                df[column],
-                format=RESOLUTION_TO_DATETIME_FORMAT_MAPPING[resolution],
-            )
-        elif column in DATE_FIELDS_IRREGULAR:
-            df[column] = pd.to_datetime(
-                df[column], format=DatetimeFormat.YMDH_COLUMN_M.value
-            )
-        elif column in QUALITY_FIELDS or column in INTEGER_FIELDS:
-            df[column] = pd.to_numeric(df[column], errors="coerce").astype(
-                pd.Int64Dtype()
-            )
-        elif column in STRING_FIELDS:
-            df[column] = df[column].astype(pd.StringDtype())
-        else:
-            df[column] = df[column].astype(float)
-
-    return df
 
 
 def parse_datetime(date_string: str) -> datetime:
